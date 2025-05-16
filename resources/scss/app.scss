@@ -1,0 +1,11 @@
+// resources/scss/app.scss
+
+@import '../../scss/admin/sb-admin-2.scss'; // Đường dẫn này có thể khác, giữ nguyên cái hiện tại của sếp
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+// Thêm import cho custom auth styles của sếp
+@import './admin/auth-custom'; // Nếu sếp đặt trong resources/scss/admin/
+// hoặc
+// @import './components/auth-forms'; // Nếu sếp đặt trong resources/scss/components/

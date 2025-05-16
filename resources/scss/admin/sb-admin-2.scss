@@ -1,0 +1,34 @@
+// resources/scss/admin/sb-admin-2.scss
+@import "@fortawesome/fontawesome-free/css/all.min.css"; // Import file CSS đã biên dịch
+
+// 2. Import Biến tùy chỉnh của SB Admin 2 (Overrides Default Bootstrap Variables)
+// Đảm bảo file này tồn tại trong resources/scss/admin/
+@import "variables";
+
+// 3. Import Bootstrap (từ node_modules) - SAU KHI import biến tùy chỉnh
+// Thay thế dòng import cũ của bạn bằng dòng này:
+@import "bootstrap/scss/bootstrap"; // Vite sẽ tự tìm trong node_modules
+
+// 4. Import các Mixins và Components tùy chỉnh của SB Admin 2
+// Đảm bảo các file này tồn tại trong resources/scss/admin/
+@import "mixins";
+@import "global";
+@import "utilities"; // Có thể gây xung đột nhẹ với utilities của Bootstrap 5, kiểm tra nếu cần
+
+// Custom Components
+@import "dropdowns";
+@import "navs";
+@import "buttons";
+@import "cards";
+@import "charts";
+@import "login";
+@import "error";
+@import "footer";
+
+// 5. (Tùy chọn) Import CSS cho DataTables Bootstrap 5 Styling (từ node_modules)
+// Bỏ comment nếu bạn sử dụng DataTables và muốn có styling mặc định của nó
+// @import "datatables.net-bs5/css/dataTables.bootstrap5.min.css";
+// @import "datatables.net-buttons-bs5/css/buttons.bootstrap5.min.css"; // Nếu dùng nút export
+
+// 6. (Tùy chọn) Thêm các SCSS tùy chỉnh của riêng bạn ở đây nếu có
+// Ví dụ: @import "my-custom-admin-styles";

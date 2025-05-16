@@ -12,9 +12,9 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('roles', function (Blueprint $table) {
-            $table->id();
-            $table->string('name');
-            $table->timestamps();
+            $table->id(); // Khóa chính tự tăng
+            $table->string('name')->unique(); // Tên vai trò (Admin, SinhVien), không trùng
+            $table->timestamps(); // Tạo cột created_at và updated_at
         });
     }
 
