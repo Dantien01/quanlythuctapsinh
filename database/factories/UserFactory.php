@@ -29,6 +29,7 @@ class UserFactory extends Factory
             'email_verified_at' => now(),
             'password' => static::$password ??= Hash::make('password'),
             'remember_token' => Str::random(10),
+            'role_id' => 2, // <<<<< THÊM DÒNG NÀY (Giả sử mặc định là role_id 2 - SinhVien)
         ];
     }
 

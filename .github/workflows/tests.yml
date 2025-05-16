@@ -41,8 +41,16 @@ jobs:
       - name: Install Dependencies
         run: composer install --no-interaction --prefer-dist --optimize-autoloader
 
-      - name: Copy Environment File
-        run: cp .env.example .env
+      - name: Setup Environment File for Testing
+          run: |
+            if [ -f .env.testing ]; then
+              echo "Found .env.testing, copying to .env"
+              cp .env.testing .env
+            else
+              echo "No .env.testing found, copying .env.example to .env"
+              php -r "file_exists('.env') || copy('.env.example', '.env');"
+            fi
+            php artisan key:generate
 
       - name: Generate Application Key
         run: php artisan key:generate
@@ -50,5 +58,7 @@ jobs:
       - name: Build Assets
         run: npm run build
 
+      - name: Run Migrations
+        run: php artisan migrate --env=testing --force
       - name: Run Tests
         run: php artisan test

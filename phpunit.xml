@@ -29,5 +29,7 @@
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
+        <!-- THÊM DÒNG NÀY -->
+        <env name="APP_KEY" value="base64:0U2mUccQMsV5AXYzsSrcqtyD0sfgWJAQAOnNqEGeNfk="/> <!-- Thay thế bằng APP_KEY thực tế từ file .env của bạn -->
     </php>
 </phpunit>
