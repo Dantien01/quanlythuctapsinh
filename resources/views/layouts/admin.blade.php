@@ -12,9 +12,13 @@
 
 <title>@yield('title', config('app.name', 'Laravel') . ' - Admin')</title>
 
-{{-- Tích hợp Vite để nạp CSS (bao gồm Bootstrap, FontAwesome, sb-admin-2.scss) và JS --}}
-{{-- Đảm bảo các đường dẫn này khớp với phần 'input' trong vite.config.js --}}
-@vite(['resources/scss/admin/sb-admin-2.scss', 'resources/js/admin/sb-admin-2.js'])
+{{-- ========================================================================= --}}
+{{-- PHẦN CẬP NHẬT - START: CHỈ GIỮ LẠI CSS TRONG HEAD VỚI VITE             --}}
+{{-- ========================================================================= --}}
+@vite(['resources/scss/admin/sb-admin-2.scss']) {{-- Chỉ nạp CSS ở đây --}}
+{{-- ========================================================================= --}}
+{{-- PHẦN CẬP NHẬT - END                                                       --}}
+{{-- ========================================================================= --}}
 
 {{-- Cho phép các trang con thêm CSS tùy chỉnh nếu cần --}}
 @stack('styles')
@@ -23,7 +27,7 @@
 <!-- Page Wrapper -->
 <div id="wrapper">
 
-    {{-- Sidebar: Nội dung sẽ nằm trong file partial --}}
+    {{-- Sidebar --}}
     @include('layouts.partials.admin-sidebar')
 
     <!-- Content Wrapper -->
@@ -32,22 +36,19 @@
         <!-- Main Content -->
         <div id="content">
 
-            {{-- Topbar: Nội dung sẽ nằm trong file partial --}}
+            {{-- Topbar --}}
             @include('layouts.partials.admin-topbar')
 
             <!-- Begin Page Content -->
             <div class="container-fluid">
-
-                {{-- Đây là nơi nội dung của các trang con sẽ được hiển thị --}}
                 @yield('content')
-
             </div>
             <!-- /.container-fluid -->
 
         </div>
         <!-- End of Main Content -->
 
-        {{-- Footer: Nội dung sẽ nằm trong file partial --}}
+        {{-- Footer --}}
         @include('layouts.partials.admin-footer')
 
     </div>
@@ -56,15 +57,22 @@
 </div>
 <!-- End of Page Wrapper -->
 
-{{-- Scroll to Top Button: Nội dung sẽ nằm trong file partial --}}
+{{-- Scroll to Top Button --}}
 @include('layouts.partials.admin-scrolltop')
 
-{{-- Logout Modal: Nội dung sẽ nằm trong file partial --}}
+{{-- Logout Modal --}}
 @include('layouts.partials.admin-logout-modal')
 
-{{-- Vite đã xử lý việc nạp JS, không cần các thẻ script tĩnh ở đây --}}
+
+{{-- ========================================================================= --}}
+{{-- PHẦN CẬP NHẬT - START: CHUYỂN VITE CHO JS XUỐNG CUỐI BODY, TRƯỚC STACK  --}}
+{{-- ========================================================================= --}}
+@vite(['resources/js/admin/sb-admin-2.js']) {{-- Nạp JS chính (chứa jQuery) ở đây --}}
+{{-- ========================================================================= --}}
+{{-- PHẦN CẬP NHẬT - END                                                       --}}
+{{-- ========================================================================= --}}
 
 {{-- Cho phép các trang con thêm JS tùy chỉnh nếu cần --}}
-@stack('scripts')
+@stack('scripts') {{-- Script của trang con sẽ chạy sau khi JS chính đã được gọi để nạp --}}
 </body>
 </html>

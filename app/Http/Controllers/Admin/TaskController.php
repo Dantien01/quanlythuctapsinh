@@ -9,6 +9,8 @@ use Illuminate\Http\Request;
 // SỬ DỤNG FORM REQUESTS ĐÃ TẠO
 use App\Http\Requests\Admin\StoreTaskRequest;
 use App\Http\Requests\Admin\UpdateTaskRequest;
+use Illuminate\Support\Facades\Auth;
+
 // KHÔNG cần import TaskProgress ở đây nếu không dùng trực tiếp trong controller này
 
 class TaskController extends Controller
@@ -90,7 +92,7 @@ class TaskController extends Controller
         // Dữ liệu đã được validate bởi StoreTaskRequest
         $validatedData = $request->validated();
 
-        $validatedData['assigner_id'] = auth()->id(); // Admin hiện tại là người giao
+        $validatedData['assigner_id'] = Auth::id(); // Admin hiện tại là người giao
 
         Task::create($validatedData);
 

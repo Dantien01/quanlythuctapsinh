@@ -14,8 +14,8 @@ use App\Models\Role;
 use App\Models\School;
 use App\Models\Major;
 use App\Models\Diary;
-use App\Models\Attendance; // Đã có
-use App\Models\Schedule;   // Đã có
+use App\Models\Attendance;
+use App\Models\Schedule;
 use App\Models\Message;
 use App\Models\DiaryComment;
 use App\Models\StudentReview;
@@ -23,21 +23,20 @@ use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Support\Facades\Storage;
 use App\Models\TaskProgress;
-
-use Carbon\Carbon; // <<< THÊM IMPORT NÀY CHO LOGIC TÍNH TOÁN
+use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany; // THÊM IMPORT NÀY
 
 /**
  * App\Models\User
  *
- * ... (các @property khác của bạn)
- * @property-read \Illuminate\Database\Eloquent\Collection<int, \App\Models\TaskProgress> $taskProgresses
- * @property-read int|null $task_progresses_count
- * @property-read float|null $attendance_rate // <<< THÊM PHPDOC CHO ACCESSOR MỚI
+ * ...
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, \App\Models\Schedule> $schedules // Cập nhật PHPDoc
+ * @property-read int|null $schedules_count // Cập nhật PHPDoc
  * ...
  */
 class User extends Authenticatable
 {
-    use HasApiTokens, HasFactory, Notifiable; // Giả sử bạn không dùng Spatie/laravel-permission trực tiếp ở đây
+    use HasApiTokens, HasFactory, Notifiable;
 
     protected $fillable = [
         'name',
@@ -68,15 +67,34 @@ class User extends Authenticatable
 
     protected $appends = [
         'profile_photo_url',
-        'attendance_rate', // <<< THÊM ACCESSOR VÀO APPENDS ĐỂ NÓ TỰ ĐỘNG XUẤT HIỆN KHI SERIALIZE MODEL
+        'attendance_rate',
     ];
 
     public function role(): BelongsTo { return $this->belongsTo(Role::class); }
     public function school(): BelongsTo { return $this->belongsTo(School::class); }
     public function major(): BelongsTo { return $this->belongsTo(Major::class); }
     public function diaries(): HasMany { return $this->hasMany(Diary::class); }
-    public function attendances(): HasMany { return $this->hasMany(Attendance::class, 'user_id'); } // Chỉ rõ foreign key
-    public function schedules(): HasMany { return $this->hasMany(Schedule::class, 'user_id'); }
+    public function attendances(): HasMany { return $this->hasMany(Attendance::class, 'user_id'); }
+
+    // ===== PHẦN CẬP NHẬT - START: THAY ĐỔI QUAN HỆ schedules() THÀNH BelongsToMany =====
+    /**
+     * Các lịch trình (Schedules) mà người dùng/sinh viên này tham gia.
+     * Đây là quan hệ Many-to-Many.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsToMany
+     */
+    public function schedules(): BelongsToMany
+    {
+        // Đảm bảo các tham số này khớp với định nghĩa trong Schedule model và bảng pivot 'schedule_user'
+        // User::class -> Schedule::class
+        // 'schedule_user' -> tên bảng pivot
+        // 'user_id' -> khóa ngoại của User trong bảng pivot
+        // 'schedule_id' -> khóa ngoại của Schedule trong bảng pivot
+        return $this->belongsToMany(Schedule::class, 'schedule_user', 'user_id', 'schedule_id')
+                    ->withTimestamps(); // (Tùy chọn) nếu bảng pivot có timestamps
+    }
+    // ===== PHẦN CẬP NHẬT - END =====
+
     public function createdSchedules(): HasMany { return $this->hasMany(Schedule::class, 'created_by'); }
     public function sentMessages(): HasMany { return $this->hasMany(Message::class, 'sender_id'); }
     public function receivedMessages(): HasMany { return $this->hasMany(Message::class, 'receiver_id'); }
@@ -133,51 +151,29 @@ class User extends Authenticatable
         return 'https://ui-avatars.com/api/?name='.urlencode($name).'&color=7F9CF5&background=EBF4FF';
     }
 
-    // =========================================================================
-    // ACCESSOR TÍNH TỶ LỆ CHUYÊN CẦN
-    // =========================================================================
-    /**
-     * Tính toán và trả về tỷ lệ chuyên cần của sinh viên.
-     * Kết quả là một số float (ví dụ: 95.5) hoặc null nếu không có buổi học nào.
-     *
-     * @return float|null
-     */
     public function getAttendanceRateAttribute(): ?float
     {
-        // 1. Lấy tổng số buổi học dự kiến BẮT BUỘC ĐIỂM DANH, KHÔNG BỊ HỦY và ĐÃ QUA
-        $totalMandatoryPastScheduledSessions = $this->schedules()
-            ->where('is_mandatory_attendance', true)
-            ->whereNotIn('status', [
-                Schedule::STATUS_CANCELLED_BY_ADMIN,
-                Schedule::STATUS_CANCELLED_BY_STUDENT
-            ])
-            ->past() // Sử dụng scopePast()
-            ->count();
-
-        if ($totalMandatoryPastScheduledSessions == 0) {
-            return null; // Hoặc 100.00 nếu bạn muốn
-        }
-
-        // 2. Tính tổng "điểm chuyên cần" đạt được
-        //    - Có mặt, Đi trễ: 1 điểm
-        //    - Vắng có phép: 0.5 điểm (hoặc trọng số bạn muốn)
-        //    - Vắng không phép: 0 điểm
-        $achievedAttendanceScore = 0;
-
-        $validScheduleIds = $this->schedules()
+        // ... (logic accessor giữ nguyên) ...
+        $validScheduleIds = $this->schedules() // Quan hệ này giờ là BelongsToMany
             ->where('is_mandatory_attendance', true)
             ->whereNotIn('status', [
                 Schedule::STATUS_CANCELLED_BY_ADMIN,
                 Schedule::STATUS_CANCELLED_BY_STUDENT
             ])
             ->past()
-            ->pluck('id');
+            ->pluck('id'); // Lấy ID từ kết quả của quan hệ
 
         if ($validScheduleIds->isEmpty()){
-             return 0.0;
+             return 0.0; // Hoặc null tùy theo logic bạn muốn
         }
 
-        // Lấy tất cả các bản ghi điểm danh liên quan đến các lịch hợp lệ
+        $totalMandatoryPastScheduledSessions = $validScheduleIds->count(); // Đếm số lịch hợp lệ
+         if ($totalMandatoryPastScheduledSessions == 0) {
+            return null;
+        }
+
+
+        $achievedAttendanceScore = 0;
         $attendancesForValidSchedules = $this->attendances()
             ->whereIn('schedule_id', $validScheduleIds)
             ->get();
@@ -186,22 +182,16 @@ class User extends Authenticatable
             switch ($attendance->status) {
                 case Attendance::STATUS_PRESENT:
                 case Attendance::STATUS_LATE:
-                    $achievedAttendanceScore += 1.0; // Được 1 điểm
+                    $achievedAttendanceScore += 1.0;
                     break;
                 case Attendance::STATUS_ABSENT_WITH_PERMISSION:
-                    $achievedAttendanceScore += 0.5; // Được 0.5 điểm (trừ một nửa)
+                    $achievedAttendanceScore += 0.5;
                     break;
                 case Attendance::STATUS_ABSENT_WITHOUT_PERMISSION:
-                    // Không cộng điểm (0 điểm)
                     break;
-                // Thêm các case khác nếu có (ví dụ: STATUS_EARLY_LEAVE có thể được 0.75 điểm)
             }
         }
-
-        // Tỷ lệ chuyên cần sẽ là (tổng điểm đạt được / tổng số buổi) * 100
-        // Tổng số buổi ở đây vẫn là $totalMandatoryPastScheduledSessions vì mỗi buổi được tính là 1 "điểm tối đa"
         $attendanceRate = ($achievedAttendanceScore / $totalMandatoryPastScheduledSessions) * 100;
-
         return round($attendanceRate, 2);
     }
 }

@@ -11,11 +11,15 @@ use App\Http\Controllers\ScheduleController; // Giả sử đây là Admin/Chung
 use App\Http\Controllers\Api\AuthController;
 
 // Controller cho API Task của Sinh viên
-use App\Http\Controllers\Api\Student\TaskApiController; // <<< ĐÃ CÓ IMPORT NÀY
+use App\Http\Controllers\Api\Student\TaskApiController;
 
-// (Tùy chọn) Controllers cho các API cụ thể khác của Sinh viên
-// use App\Http\Controllers\Api\Student\StudentScheduleApiController;
-// use App\Http\Controllers\Api\Student\StudentAttendanceApiController;
+// Controller cho API Attendance của Sinh viên
+use App\Http\Controllers\Api\Student\StudentAttendanceApiController;
+
+// === THÊM IMPORT CHO STUDENT SCHEDULE API CONTROLLER ===
+use App\Http\Controllers\Api\Student\StudentScheduleApiController;
+// ========================================================
+
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -42,36 +46,36 @@ Route::middleware('auth:sanctum')->group(function () {
     // =====================================================================
     Route::apiResource('interns', InternController::class);
     Route::apiResource('projects', ProjectController::class);
-    Route::apiResource('tasks', TaskController::class); // Nếu đây là TaskController của Admin, cần phân quyền
+    Route::apiResource('tasks', TaskController::class);
     Route::apiResource('evaluations', EvaluationController::class);
-    Route::apiResource('schedules', ScheduleController::class); // Nếu đây là ScheduleController của Admin, cần phân quyền
+    Route::apiResource('schedules', ScheduleController::class);
 
     // =====================================================================
     // API ENDPOINTS CHO MOBILE APP CỦA SINH VIÊN
     // =====================================================================
-    Route::prefix('student')->name('api.student.')->group(function () { // <<< THÊM GROUP NÀY
-        // Routes cho Task của Sinh viên
+    Route::prefix('student')->name('api.student.')->group(function () {
+        // --- Task Routes ---
         Route::get('/tasks', [TaskApiController::class, 'index'])->name('tasks.index');
         Route::get('/tasks/{task}', [TaskApiController::class, 'show'])->name('tasks.show');
-        // Ví dụ: Thêm route để sinh viên cập nhật tiến độ công việc qua API
-        // Route::post('/tasks/{task}/progress', [TaskApiController::class, 'storeProgress'])->name('tasks.progress.store');
-        // Ví dụ: Thêm route để sinh viên cập nhật trạng thái công việc qua API
-        // Route::post('/tasks/{task}/update-status', [TaskApiController::class, 'updateTaskStatus'])->name('tasks.updateStatus');
+        Route::post('/tasks/{task}/update-status', [TaskApiController::class, 'updateTaskStatus'])->name('tasks.updateStatus');
+        Route::post('/tasks/{task}/progress', [TaskApiController::class, 'storeProgress'])->name('tasks.progress.store');
+        Route::put('/tasks/{task}/progress/{taskProgress}', [TaskApiController::class, 'updateProgress'])->name('tasks.progress.update');
+        Route::delete('/tasks/{task}/progress/{taskProgress}', [TaskApiController::class, 'destroyProgress'])->name('tasks.progress.destroy');
 
-        // Ví dụ: Routes cho Schedule của Sinh viên (nếu bạn tạo StudentScheduleApiController)
-        // Route::get('/schedules', [StudentScheduleApiController::class, 'index'])->name('schedules.index');
+        // --- Attendance Routes ---
+        Route::post('/attendance/clock-in', [StudentAttendanceApiController::class, 'clockIn'])->name('attendance.clockin');
+        Route::post('/attendance/clock-out', [StudentAttendanceApiController::class, 'clockOut'])->name('attendance.clockout');
+        Route::get('/attendance/history', [StudentAttendanceApiController::class, 'getAttendanceHistory'])->name('attendance.history');
+        Route::get('/attendance/status', [StudentAttendanceApiController::class, 'getCurrentAttendanceStatus'])->name('attendance.status');
 
-        // Ví dụ: Routes cho Attendance của Sinh viên (nếu bạn tạo StudentAttendanceApiController)
-        // Route::post('/attendance/checkin', [StudentAttendanceApiController::class, 'checkIn'])->name('attendance.checkin');
-        // Route::post('/attendance/checkout', [StudentAttendanceApiController::class, 'checkOut'])->name('attendance.checkout');
+        // === CẬP NHẬT: ROUTES CHO SCHEDULE CỦA SINH VIÊN ===
+        Route::get('/schedules', [StudentScheduleApiController::class, 'index'])->name('schedules.index');
+        Route::get('/schedules/events/{event_id}', [StudentScheduleApiController::class, 'showEvent'])->name('schedules.events.show');
+        // ====================================================
+
 
         // ... các route khác của sinh viên có thể thêm ở đây ...
     });
     // =====================================================================
 
 });
-
-// Route mặc định của Sanctum để lấy thông tin user (đã bị comment out, bạn đang dùng AuthController@user)
-// Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
-// return $request->user();
-// });

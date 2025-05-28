@@ -1,4 +1,3 @@
-// tests/TestCase.php
 <?php
 
 namespace Tests; 

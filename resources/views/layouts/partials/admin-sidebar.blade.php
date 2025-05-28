@@ -71,6 +71,7 @@
         </div>
 
         <!-- Nav Item - Quản lý Lịch thực tập -->
+        {{-- Giữ nguyên điều kiện active và show của menu cha như trong file gốc bạn gửi --}}
         <li class="nav-item {{ request()->routeIs('admin.schedules.*') ? 'active' : '' }}">
             <a class="nav-link collapsed" href="#" data-bs-toggle="collapse" data-bs-target="#collapseSchedules"
                 aria-expanded="{{ request()->routeIs('admin.schedules.*') ? 'true' : 'false' }}" aria-controls="collapseSchedules">
@@ -82,7 +83,14 @@
                     <h6 class="collapse-header">Lịch thực tập:</h6>
                     <a class="collapse-item {{ request()->routeIs('admin.schedules.index') ? 'active' : '' }}" href="{{ route('admin.schedules.index') }}">Tất cả lịch</a>
                     <a class="collapse-item {{ request()->routeIs('admin.schedules.create') ? 'active' : '' }}" href="{{ route('admin.schedules.create') }}">Tạo lịch mới</a>
-                    <a class="collapse-item {{ request()->routeIs('admin.schedules.pending') ? 'active' : '' }}" href="{{ route('admin.schedules.pending') }}">Yêu cầu chờ duyệt</a>
+                    {{-- ========================================================================= --}}
+                    {{-- PHẦN CẬP NHẬT - START: SỬA TÊN ROUTE CHO "YÊU CẦU CHỜ DUYỆT"          --}}
+                    {{-- ========================================================================= --}}
+                    {{-- Giữ nguyên điều kiện active cho item con như trong file gốc bạn gửi, chỉ sửa tên route --}}
+                    <a class="collapse-item {{ request()->routeIs('admin.schedules.pending') ? 'active' : '' }}" href="{{ route('admin.schedules.pendingRequests') }}">Yêu cầu chờ duyệt</a>
+                    {{-- ========================================================================= --}}
+                    {{-- PHẦN CẬP NHẬT - END                                                       --}}
+                    {{-- ========================================================================= --}}
                 </div>
             </div>
         </li>
@@ -125,11 +133,11 @@
     {{-- ============================================== --}}
     @elseif(Auth::user()->hasRole('SinhVien'))
 
-        <!-- Nav Item - Trang Chủ Sinh viên -->  {{-- <<< THAY ĐỔI TÊN VÀ ICON --}}
+        <!-- Nav Item - Trang Chủ Sinh viên -->
         <li class="nav-item {{ request()->routeIs('dashboard') ? 'active' : '' }}">
             <a class="nav-link" href="{{ route('dashboard') }}">
-                <i class="fas fa-fw fa-home"></i> {{-- <<< ICON GIỐNG ADMIN --}}
-                <span>Trang Chủ</span></a>        {{-- <<< TÊN GIỐNG ADMIN --}}
+                <i class="fas fa-fw fa-home"></i>
+                <span>Trang Chủ</span></a>
         </li>
 
          <!-- Divider -->
@@ -156,7 +164,7 @@
             </a>
         </li>
 
-        <!-- Nav Item - Công việc của tôi --> {{-- <<< THÊM MỤC NÀY --}}
+        <!-- Nav Item - Công việc của tôi -->
         <li class="nav-item {{ request()->routeIs('student.tasks.*') ? 'active' : '' }}">
             <a class="nav-link" href="{{ route('student.tasks.index') }}">
                 <i class="fas fa-fw fa-tasks"></i>
