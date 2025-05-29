@@ -4,40 +4,48 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo; // Import BelongsTo
-use App\Models\User; // Import User để sử dụng trong relationship
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany; // << THÊM IMPORT NÀY
+use App\Models\Conversation; // << UNCOMMENT DÒNG NÀY
+use App\Models\User;       // Đảm bảo User model cũng được import (thường đã có)
+use App\Models\MessageReadStatus; // << UNCOMMENT DÒNG NÀY
 
 class Message extends Model
 {
-    use HasFactory; // Bỏ Notifiable nếu không cần thiết cho model này
+    use HasFactory;
 
     /**
      * Các thuộc tính có thể được gán hàng loạt.
-     * Đổi 'content' thành 'body' và thêm 'subject' để khớp với logic controller/migration.
      *
      * @var array<int, string>
      */
     protected $fillable = [
+        'conversation_id',
         'sender_id',
-        'receiver_id',
-        'subject', // Thêm subject (nếu bạn dùng trong controller/migration)
-        'content',    // Đổi từ 'content' thành 'body'
-        'read_at'
+        'content',
+        // 'subject', // TùY CHỌN: Giữ lại nếu bạn vẫn dùng, xóa nếu không
     ];
 
     /**
      * Các thuộc tính nên được chuyển đổi kiểu dữ liệu.
-     * Thêm casting cho read_at.
      *
      * @var array<string, string>
      */
     protected $casts = [
-        'read_at' => 'datetime', // Chuyển đổi read_at thành đối tượng Carbon
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
     ];
 
     /**
+     * Lấy cuộc trò chuyện mà tin nhắn này thuộc về.
+     */
+    public function conversation(): BelongsTo
+    {
+        return $this->belongsTo(Conversation::class, 'conversation_id');
+    }
+
+    /**
      * Lấy người gửi tin nhắn.
-     * Relationship đã đúng.
      */
     public function sender(): BelongsTo
     {
@@ -45,11 +53,29 @@ class Message extends Model
     }
 
     /**
-     * Lấy người nhận tin nhắn.
-     * Relationship đã đúng.
+     * Lấy tất cả các trạng thái đọc cho tin nhắn này.
+     * Sử dụng nếu bạn có bảng message_read_statuses.
      */
-    public function receiver(): BelongsTo
+    public function readStatuses(): HasMany // << UNCOMMENT VÀ THÊM KIỂU TRẢ VỀ HasMany
+    {                                        // << UNCOMMENT
+        return $this->hasMany(MessageReadStatus::class, 'message_id'); // << UNCOMMENT
+    }                                        // << UNCOMMENT
+
+    /**
+     * (TÙY CHỌN) Kiểm tra xem tin nhắn đã được đọc bởi một người dùng cụ thể chưa.
+     * Sử dụng nếu bạn có bảng message_read_statuses.
+     *
+     * @param int $userId
+     * @return bool
+     */
+    public function isReadBy(int $userId): bool // << UNCOMMENT NẾU BẠN MUỐN SỬ DỤNG TRỰC TIẾP PHƯƠNG THỨC NÀY
     {
-        return $this->belongsTo(User::class, 'receiver_id');
+        // Kiểm tra xem có bản ghi nào trong message_read_statuses cho message này và user này
+        // mà có read_at không null không.
+        // Eager load readStatuses nếu nó chưa được load để tối ưu
+        if (!$this->relationLoaded('readStatuses')) {
+            $this->load('readStatuses');
+        }
+        return $this->readStatuses->where('user_id', $userId)->whereNotNull('read_at')->isNotEmpty();
     }
 }

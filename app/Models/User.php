@@ -7,7 +7,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\HasOne; // Giữ lại nếu bạn có dùng ở đâu đó
 use Illuminate\Support\Str;
 // Các model bạn đã import
 use App\Models\Role;
@@ -19,21 +19,15 @@ use App\Models\Schedule;
 use App\Models\Message;
 use App\Models\DiaryComment;
 use App\Models\StudentReview;
+use App\Models\Conversation;
+use App\Models\MessageReadStatus;
 use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Support\Facades\Storage;
 use App\Models\TaskProgress;
 use Carbon\Carbon;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany; // THÊM IMPORT NÀY
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
-/**
- * App\Models\User
- *
- * ...
- * @property-read \Illuminate\Database\Eloquent\Collection<int, \App\Models\Schedule> $schedules // Cập nhật PHPDoc
- * @property-read int|null $schedules_count // Cập nhật PHPDoc
- * ...
- */
 class User extends Authenticatable
 {
     use HasApiTokens, HasFactory, Notifiable;
@@ -68,6 +62,7 @@ class User extends Authenticatable
     protected $appends = [
         'profile_photo_url',
         'attendance_rate',
+        // 'unread_messages_count', // Nếu muốn tự động thêm vào JSON/array
     ];
 
     public function role(): BelongsTo { return $this->belongsTo(Role::class); }
@@ -76,41 +71,28 @@ class User extends Authenticatable
     public function diaries(): HasMany { return $this->hasMany(Diary::class); }
     public function attendances(): HasMany { return $this->hasMany(Attendance::class, 'user_id'); }
 
-    // ===== PHẦN CẬP NHẬT - START: THAY ĐỔI QUAN HỆ schedules() THÀNH BelongsToMany =====
-    /**
-     * Các lịch trình (Schedules) mà người dùng/sinh viên này tham gia.
-     * Đây là quan hệ Many-to-Many.
-     *
-     * @return \Illuminate\Database\Eloquent\Relations\BelongsToMany
-     */
     public function schedules(): BelongsToMany
     {
-        // Đảm bảo các tham số này khớp với định nghĩa trong Schedule model và bảng pivot 'schedule_user'
-        // User::class -> Schedule::class
-        // 'schedule_user' -> tên bảng pivot
-        // 'user_id' -> khóa ngoại của User trong bảng pivot
-        // 'schedule_id' -> khóa ngoại của Schedule trong bảng pivot
         return $this->belongsToMany(Schedule::class, 'schedule_user', 'user_id', 'schedule_id')
-                    ->withTimestamps(); // (Tùy chọn) nếu bảng pivot có timestamps
+                    ->withTimestamps();
     }
-    // ===== PHẦN CẬP NHẬT - END =====
 
     public function createdSchedules(): HasMany { return $this->hasMany(Schedule::class, 'created_by'); }
-    public function sentMessages(): HasMany { return $this->hasMany(Message::class, 'sender_id'); }
-    public function receivedMessages(): HasMany { return $this->hasMany(Message::class, 'receiver_id'); }
-    public function diaryComments(): HasMany { return $this->hasMany(DiaryComment::class); }
-    public function reviewsReceived(): HasMany { return $this->hasMany(StudentReview::class, 'user_id'); }
-    public function reviewsWritten(): HasMany { return $this->hasMany(StudentReview::class, 'reviewer_id'); }
 
-    public function lastMessage(): HasOne
-    {
-        return $this->hasOne(Message::class, 'id', 'last_message_id');
-    }
+    // Các mối quan hệ message cũ có thể không còn cần thiết nếu đã chuyển hoàn toàn sang conversation
+    // public function sentMessages(): HasMany { return $this->hasMany(Message::class, 'sender_id'); }
+    // public function receivedMessages(): HasMany { return $this->hasMany(Message::class, 'receiver_id'); }
+    // public function lastMessage(): HasOne { return $this->hasOne(Message::class, 'id', 'last_message_id'); }
+
 
     public function taskProgresses(): HasMany
     {
         return $this->hasMany(TaskProgress::class, 'user_id');
     }
+    public function diaryComments(): HasMany { return $this->hasMany(DiaryComment::class); }
+    public function reviewsReceived(): HasMany { return $this->hasMany(StudentReview::class, 'user_id'); }
+    public function reviewsWritten(): HasMany { return $this->hasMany(StudentReview::class, 'reviewer_id'); }
+
 
     public function hasRole(string $roleName): bool
     {
@@ -151,47 +133,101 @@ class User extends Authenticatable
         return 'https://ui-avatars.com/api/?name='.urlencode($name).'&color=7F9CF5&background=EBF4FF';
     }
 
+    // ==================================================
+    //   ===== PHẦN CẬP NHẬT getAttendanceRateAttribute =====
+    // ==================================================
     public function getAttendanceRateAttribute(): ?float
     {
-        // ... (logic accessor giữ nguyên) ...
-        $validScheduleIds = $this->schedules() // Quan hệ này giờ là BelongsToMany
+        // Lấy các ID của lịch trình mà người dùng này tham gia
+        // và thỏa mãn các điều kiện
+        $validScheduleIds = $this->schedules() // Đây là BelongsToMany relationship
+            // Các điều kiện where này sẽ được áp dụng lên bảng 'schedules' (bảng chính của relationship)
             ->where('is_mandatory_attendance', true)
             ->whereNotIn('status', [
-                Schedule::STATUS_CANCELLED_BY_ADMIN,
-                Schedule::STATUS_CANCELLED_BY_STUDENT
+                'cancelled_admin', // Giả sử đây là các giá trị string trong DB
+                'cancelled_student' // Hoặc sử dụng Schedule::STATUS_CANCELLED_BY_ADMIN nếu bạn định nghĩa hằng số
             ])
-            ->past()
-            ->pluck('id'); // Lấy ID từ kết quả của quan hệ
+            // SỬ DỤNG TÊN CỘT ĐÚNG: overall_end_date
+            ->where('overall_end_date', '<', Carbon::now())
+            ->pluck('schedules.id'); // Chỉ định rõ schedules.id để tránh nhầm lẫn
 
         if ($validScheduleIds->isEmpty()){
-             return 0.0; // Hoặc null tùy theo logic bạn muốn
+             return 0.0;
         }
 
-        $totalMandatoryPastScheduledSessions = $validScheduleIds->count(); // Đếm số lịch hợp lệ
+        $totalMandatoryPastScheduledSessions = $validScheduleIds->count();
          if ($totalMandatoryPastScheduledSessions == 0) {
-            return null;
+            // Trả về null hoặc 0.0 tùy theo logic bạn muốn hiển thị khi không có buổi học bắt buộc nào trong quá khứ
+            return 0.0;
         }
-
 
         $achievedAttendanceScore = 0;
-        $attendancesForValidSchedules = $this->attendances()
+        // Lấy các bản ghi điểm danh của user này cho các lịch trình hợp lệ đã lấy ở trên
+        $attendancesForValidSchedules = $this->attendances() // Đây là HasMany relationship
             ->whereIn('schedule_id', $validScheduleIds)
             ->get();
 
         foreach ($attendancesForValidSchedules as $attendance) {
+            // Giả sử bạn có các hằng số định nghĩa status trong Model Attendance
+            // Ví dụ: Attendance::STATUS_PRESENT, Attendance::STATUS_LATE, etc.
+            // Nếu không, sử dụng giá trị string trực tiếp từ DB
             switch ($attendance->status) {
-                case Attendance::STATUS_PRESENT:
-                case Attendance::STATUS_LATE:
+                case 'present': // Thay 'present' bằng giá trị thực tế hoặc hằng số
+                case 'late':    // Thay 'late' bằng giá trị thực tế hoặc hằng số
                     $achievedAttendanceScore += 1.0;
                     break;
-                case Attendance::STATUS_ABSENT_WITH_PERMISSION:
+                case 'absent_with_permission': // Thay bằng giá trị thực tế hoặc hằng số
                     $achievedAttendanceScore += 0.5;
                     break;
-                case Attendance::STATUS_ABSENT_WITHOUT_PERMISSION:
+                case 'absent_without_permission': // Thay bằng giá trị thực tế hoặc hằng số
+                    // Không cộng điểm
                     break;
             }
         }
+
         $attendanceRate = ($achievedAttendanceScore / $totalMandatoryPastScheduledSessions) * 100;
         return round($attendanceRate, 2);
     }
+    // ==================================================
+
+
+    // ==================================================
+    //   ===== PHẦN TIN NHẮN ĐÃ CẬP NHẬT =====
+    // ==================================================
+    public function conversations(): BelongsToMany
+    {
+        return $this->belongsToMany(Conversation::class, 'conversation_participants', 'user_id', 'conversation_id')
+                    ->withTimestamps();
+    }
+
+    protected function unreadMessagesCount(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => $this->calculateUnreadMessages(),
+        );
+    }
+
+    public function calculateUnreadMessages(): int
+    {
+        $unreadCount = 0;
+        $conversations = $this->conversations()->with([
+            'messages' => function ($query) {
+                $query->with('readStatuses');
+            }
+        ])->get();
+
+        foreach ($conversations as $conversation) {
+            $unreadCount += $conversation->messages
+                ->where('sender_id', '!=', $this->id)
+                ->filter(function ($message) {
+                    $hasBeenRead = $message->readStatuses
+                                    ->where('user_id', $this->id)
+                                    ->whereNotNull('read_at')
+                                    ->isNotEmpty();
+                    return !$hasBeenRead;
+                })->count();
+        }
+        return $unreadCount;
+    }
+    // ==================================================
 }

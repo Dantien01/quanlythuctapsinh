@@ -14,13 +14,13 @@ use App\Http\Controllers\AdminDashboardController;
 use App\Http\Controllers\Admin\DiaryController as AdminDiaryController;
 use App\Http\Controllers\Admin\AttendanceController as AdminAttendanceController;
 use App\Http\Controllers\Admin\StudentReviewController as AdminStudentReviewController;
-use App\Http\Controllers\Admin\MessageController as AdminMessageController;
+use App\Http\Controllers\Admin\MessageController as AdminMessageController; // Đã import
 use App\Http\Controllers\Admin\TaskController;
 // Student Controllers
-use App\Http\Controllers\Student\ScheduleController as StudentScheduleController; // Đã import
+use App\Http\Controllers\Student\ScheduleController as StudentScheduleController;
 use App\Http\Controllers\Student\DiaryController as StudentDiaryController;
 use App\Http\Controllers\Student\AttendanceController as StudentAttendanceController;
-use App\Http\Controllers\Student\MessageController as StudentMessageController;
+use App\Http\Controllers\Student\MessageController as StudentMessageController; // Đã import
 use App\Http\Controllers\Student\StudentTaskController;
 // Notification Controller
 use App\Http\Controllers\NotificationController;
@@ -47,7 +47,6 @@ Route::middleware('auth')->group(function () {
 //   ===== KHU VỰC ADMIN =====
 //   ==================================================
 Route::middleware(['auth', 'role:Admin'])->prefix('admin')->name('admin.')->group(function () {
-    // ... (Các route admin khác giữ nguyên) ...
     Route::redirect('/', '/admin/dashboard', 301)->name('index');
     Route::get('/dashboard', [AdminDashboardController::class, 'index'])->name('dashboard');
 
@@ -56,7 +55,7 @@ Route::middleware(['auth', 'role:Admin'])->prefix('admin')->name('admin.')->grou
     Route::resource('users', UserController::class)->except(['create', 'store']);
     Route::put('/users/{user}/approve', [UserController::class, 'approve'])->name('users.approve');
     Route::put('/users/{user}/reject', [UserController::class, 'reject'])->name('users.reject');
-    Route::get('/students/{user}', [UserController::class, 'show'])->name('students.show');
+    Route::get('/students/{user}', [UserController::class, 'show'])->name('students.show'); // Lưu ý: UserController@show cho student details
 
     Route::resource('schedules', AdminScheduleController::class);
     Route::get('/schedules/pending', [AdminScheduleController::class, 'pendingRequests'])->name('schedules.pendingRequests');
@@ -71,9 +70,12 @@ Route::middleware(['auth', 'role:Admin'])->prefix('admin')->name('admin.')->grou
     Route::post('diaries/{diary}/comments', [AdminDiaryController::class, 'storeComment'])->name('diaries.comments.store');
     Route::post('diaries/{diary}/review', [AdminDiaryController::class, 'storeReview'])->name('diaries.review.store');
 
+    // --- ROUTES CHO TIN NHẮN CỦA ADMIN ---
     Route::get('/messages', [AdminMessageController::class, 'index'])->name('messages.index');
-    Route::get('/messages/{user}', [AdminMessageController::class, 'show'])->name('messages.show');
-    Route::post('/messages/{user}', [AdminMessageController::class, 'reply'])->name('messages.reply');
+    // {student} sẽ tự động inject User model nếu Route Model Binding được bật và ID hợp lệ
+    // Đảm bảo tên tham số trong route khớp với tên biến trong phương thức controller (ví dụ: {student} và User $student)
+    Route::get('/messages/{student}', [AdminMessageController::class, 'show'])->name('messages.show');
+    Route::post('/messages/{student}/reply', [AdminMessageController::class, 'reply'])->name('messages.reply'); // Đổi tên từ {user} thành {student} cho rõ nghĩa
 
     Route::resource('tasks', TaskController::class);
 });
@@ -84,22 +86,12 @@ Route::middleware(['auth', 'role:Admin'])->prefix('admin')->name('admin.')->grou
 //   ==================================================
 Route::middleware(['auth', 'role:SinhVien'])->prefix('student')->name('student.')->group(function () {
 
-    Route::get('/dashboard', [StudentTaskController::class, 'index'])->name('dashboard');
+    Route::get('/dashboard', [StudentTaskController::class, 'index'])->name('dashboard'); // Giả sử dashboard của SV là trang task
 
     Route::middleware(['profile.approved'])->group(function() {
         Route::get('/schedule', [StudentScheduleController::class, 'index'])->name('schedule.index');
         Route::post('/schedule/{schedule}/request-change', [StudentScheduleController::class, 'requestChange'])->name('schedule.requestChange');
-
-        // =========================================================================
-        // PHẦN CẬP NHẬT - START: THÊM ROUTE XEM CHI TIẾT LỊCH CHO SINH VIÊN
-        // =========================================================================
-        // Sử dụng {schedule} để Laravel tự động thực hiện Route Model Binding
-        // Route sẽ tìm Schedule model dựa trên ID truyền vào URL
-        Route::get('/schedules/{schedule}/detail', [StudentScheduleController::class, 'getScheduleDetail'])
-             ->name('schedules.detail'); // Tên route sẽ là student.schedules.detail
-        // =========================================================================
-        // PHẦN CẬP NHẬT - END
-        // =========================================================================
+        Route::get('/schedules/{schedule}/detail', [StudentScheduleController::class, 'getScheduleDetail'])->name('schedules.detail');
 
         Route::resource('diaries', StudentDiaryController::class);
         Route::post('diaries/{diary}/comments', [StudentDiaryController::class, 'storeComment'])->name('diaries.comments.store');
@@ -107,7 +99,9 @@ Route::middleware(['auth', 'role:SinhVien'])->prefix('student')->name('student.'
         Route::post('/attendance/check-in', [StudentAttendanceController::class, 'checkIn'])->name('attendance.checkin');
         Route::post('/attendance/check-out', [StudentAttendanceController::class, 'checkOut'])->name('attendance.checkout');
 
+        // --- ROUTES CHO TIN NHẮN CỦA SINH VIÊN ---
         Route::get('/messages', [StudentMessageController::class, 'index'])->name('messages.index');
+        // Route create có thể không cần thiết nếu form gửi tin nhắn nằm ngay trên trang index
         Route::get('/messages/create', [StudentMessageController::class, 'create'])->name('messages.create');
         Route::post('/messages', [StudentMessageController::class, 'store'])->name('messages.store');
 

@@ -25,43 +25,34 @@
             <a class="nav-link dropdown-toggle" href="#" id="alertsDropdown" role="button"
                 data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false" title="Thông báo">
                 <i class="fas fa-bell fa-fw text-primary"></i>
-                @auth {{-- Đảm bảo chỉ query khi đã đăng nhập --}}
+                @auth
                     @php
-                        // Lấy số lượng thông báo chưa đọc một cách an toàn
                         $currentUser = Auth::user();
                         $unreadNotificationsCount = $currentUser ? $currentUser->unreadNotifications()->count() : 0;
                     @endphp
                     @if($unreadNotificationsCount > 0)
-                        {{-- ID này để JavaScript có thể cập nhật --}}
                         <span class="badge bg-danger badge-counter" id="unreadNotificationsCount">{{ $unreadNotificationsCount > 9 ? '9+' : $unreadNotificationsCount }}</span>
                     @else
-                         {{-- Vẫn tạo span này nhưng ẩn đi để JS có thể tìm thấy và show() khi có noti mới --}}
                         <span class="badge bg-danger badge-counter" id="unreadNotificationsCount" style="display: none;">0</span>
                     @endif
                 @endauth
             </a>
-            <!-- Dropdown - Alerts -->
-            {{-- ID này để JavaScript có thể thêm/xóa item hoặc cập nhật UI --}}
             <div class="dropdown-list dropdown-menu dropdown-menu-end shadow animated--grow-in" aria-labelledby="alertsDropdown" style="min-width: 320px;" id="notificationsDropdownContainer">
                  <h6 class="dropdown-header"> Trung tâm Thông báo </h6>
                  @auth
-                    {{-- Lấy 5 thông báo mới nhất, cả đọc và chưa đọc để hiển thị --}}
                     @php
-                        // Lấy 5 thông báo mới nhất, ưu tiên chưa đọc lên đầu
                         $notificationsToDisplay = Auth::user()
                                                     ? Auth::user()->notifications()
-                                                                ->orderByRaw('read_at IS NULL DESC, created_at DESC') // Ưu tiên chưa đọc, rồi mới nhất
+                                                                ->orderByRaw('read_at IS NULL DESC, created_at DESC')
                                                                 ->take(5)
                                                                 ->get()
                                                     : collect();
                     @endphp
                     @forelse ($notificationsToDisplay as $notification)
                         @php $isUnread = is_null($notification->read_at); @endphp
-                        {{-- Thêm class 'notification-item' và các data attributes --}}
                         <a @class([
                                 'dropdown-item', 'd-flex', 'align-items-center',
-                                'notification-item', // Class để JS bắt sự kiện
-                                // 'bg-light' => $isUnread, // Có thể bỏ class này nếu JS sẽ xử lý style
+                                'notification-item',
                             ])
                            href="{{ $notification->data['url'] ?? '#' }}"
                            data-notification-id="{{ $notification->id }}"
@@ -75,7 +66,7 @@
                             <div>
                                 <div class="small text-gray-500">{{ $notification->created_at->diffForHumans() }}</div>
                                 <span @class(['fw-bold' => $isUnread, 'text-muted' => !$isUnread])>
-                                    {{ Str::limit($notification->data['message'] ?? 'Bạn có thông báo mới.', 70) }} {{-- Giới hạn độ dài message --}}
+                                    {{ Str::limit($notification->data['message'] ?? 'Bạn có thông báo mới.', 70) }}
                                 </span>
                             </div>
                         </a>
@@ -83,10 +74,8 @@
                         <span class="dropdown-item text-center small text-gray-500" id="noNotificationsMessage">Không có thông báo nào.</span>
                     @endforelse
 
-                    {{-- Chỉ hiển thị nếu có bất kỳ thông báo nào (đã đọc hoặc chưa đọc) --}}
                     @if(Auth::user()->notifications()->exists())
-                        <a class="dropdown-item text-center small text-gray-500" href="#">{{-- {{ route('admin.notifications.index') }} --}}Xem tất cả</a>
-                        {{-- Chỉ hiển thị nếu còn thông báo chưa đọc --}}
+                        <a class="dropdown-item text-center small text-gray-500" href="#">Xem tất cả</a>
                         @if($unreadNotificationsCount > 0)
                             <a class="dropdown-item text-center small text-primary mark-all-as-read-btn" href="#"
                                data-mark-all-url="{{ route('notifications.markAllAsRead') }}">Đánh dấu tất cả đã đọc</a>
@@ -106,13 +95,19 @@
                role="button"
                title="Tin nhắn">
                 <i class="fas fa-envelope fa-fw text-primary"></i>
-                @auth @php $unreadMessagesCount = \App\Models\Message::where('receiver_id', Auth::id())->whereNull('read_at')->count(); @endphp @if($unreadMessagesCount > 0) <span class="badge bg-danger badge-counter">{{ $unreadMessagesCount > 9 ? '9+' : $unreadMessagesCount }}</span> @endif @endauth
+                @auth
+                    {{-- SỬ DỤNG ACCESSOR MỚI --}}
+                    @php $unreadMessagesCount = Auth::user()->unread_messages_count; @endphp
+                    @if($unreadMessagesCount > 0)
+                        <span class="badge bg-danger badge-counter">{{ $unreadMessagesCount > 9 ? '9+' : $unreadMessagesCount }}</span>
+                    @endif
+                @endauth
             </a>
         </li>
 
         {{-- ===== NÚT GỬI TIN NHẮN (CHỈ DÀNH CHO SINH VIÊN) ===== --}}
         @auth
-            @if(Auth::user()->hasRole('SinhVien'))
+            @if(Auth::user()->hasRole('SinhVien') && Route::has('student.messages.create')) {{-- Kiểm tra route tồn tại --}}
                 <li class="nav-item no-arrow mx-1">
                      <a class="nav-link" href="{{ route('student.messages.create') }}" title="Gửi tin nhắn mới">
                         <i class="fas fa-paper-plane fa-fw text-primary"></i>
