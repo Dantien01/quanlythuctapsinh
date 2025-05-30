@@ -12,13 +12,11 @@
 
 <title>@yield('title', config('app.name', 'Laravel') . ' - Admin')</title>
 
-{{-- ========================================================================= --}}
-{{-- PHẦN CẬP NHẬT - START: CHỈ GIỮ LẠI CSS TRONG HEAD VỚI VITE             --}}
-{{-- ========================================================================= --}}
-@vite(['resources/scss/admin/sb-admin-2.scss']) {{-- Chỉ nạp CSS ở đây --}}
-{{-- ========================================================================= --}}
-{{-- PHẦN CẬP NHẬT - END                                                       --}}
-{{-- ========================================================================= --}}
+{{-- CSS cho template sb-admin-2 (Vite) --}}
+@vite(['resources/scss/admin/sb-admin-2.scss'])
+
+{{-- (TÙY CHỌN) CSS chung của ứng dụng, nếu cần cho admin --}}
+{{-- @vite(['resources/css/app.css']) --}}
 
 {{-- Cho phép các trang con thêm CSS tùy chỉnh nếu cần --}}
 @stack('styles')
@@ -36,7 +34,7 @@
         <!-- Main Content -->
         <div id="content">
 
-            {{-- Topbar --}}
+            {{-- Topbar (Nơi chứa nút thông báo) --}}
             @include('layouts.partials.admin-topbar')
 
             <!-- Begin Page Content -->
@@ -65,14 +63,22 @@
 
 
 {{-- ========================================================================= --}}
-{{-- PHẦN CẬP NHẬT - START: CHUYỂN VITE CHO JS XUỐNG CUỐI BODY, TRƯỚC STACK  --}}
-{{-- ========================================================================= --}}
-@vite(['resources/js/admin/sb-admin-2.js']) {{-- Nạp JS chính (chứa jQuery) ở đây --}}
-{{-- ========================================================================= --}}
-{{-- PHẦN CẬP NHẬT - END                                                       --}}
+{{--                       PHẦN SCRIPTS Ở CUỐI BODY                             --}}
 {{-- ========================================================================= --}}
 
+{{-- 1. JavaScript của template SB Admin 2 (NẾU CÓ và không bao gồm jQuery toàn cục) --}}
+@vite(['resources/js/admin/sb-admin-2.js'])
+
+{{-- 2. JavaScript CHÍNH CỦA ỨNG DỤNG BẠN (sẽ chứa jQuery và notification-handler) --}}
+{{-- Đảm bảo file này được gọi SAU sb-admin-2.js nếu sb-admin-2.js cần jQuery, --}}
+{{-- hoặc nếu sb-admin-2.js có jQuery riêng thì cần đảm bảo app.js không xung đột (app.js sẽ ghi đè $ nếu cần). --}}
+{{-- Với giả định sb-admin-2.js không có jQuery toàn cục, thứ tự này là OK. --}}
+@vite(['resources/js/app.js'])
+
+{{-- (TÙY CHỌN) Alpine.js từ CDN, nếu bạn dùng và chưa có trong các file JS trên --}}
+{{-- <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script> --}}
+
 {{-- Cho phép các trang con thêm JS tùy chỉnh nếu cần --}}
-@stack('scripts') {{-- Script của trang con sẽ chạy sau khi JS chính đã được gọi để nạp --}}
+@stack('scripts')
 </body>
 </html>

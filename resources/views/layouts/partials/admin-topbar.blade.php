@@ -75,7 +75,7 @@
                     @endforelse
 
                     @if(Auth::user()->notifications()->exists())
-                        <a class="dropdown-item text-center small text-gray-500" href="#">Xem tất cả</a>
+                        <a class="dropdown-item text-center small text-gray-500" href="#">Xem tất cả</a> {{-- TODO: Cập nhật href này đến trang xem tất cả thông báo --}}
                         @if($unreadNotificationsCount > 0)
                             <a class="dropdown-item text-center small text-primary mark-all-as-read-btn" href="#"
                                data-mark-all-url="{{ route('notifications.markAllAsRead') }}">Đánh dấu tất cả đã đọc</a>
@@ -96,7 +96,6 @@
                title="Tin nhắn">
                 <i class="fas fa-envelope fa-fw text-primary"></i>
                 @auth
-                    {{-- SỬ DỤNG ACCESSOR MỚI --}}
                     @php $unreadMessagesCount = Auth::user()->unread_messages_count; @endphp
                     @if($unreadMessagesCount > 0)
                         <span class="badge bg-danger badge-counter">{{ $unreadMessagesCount > 9 ? '9+' : $unreadMessagesCount }}</span>
@@ -107,7 +106,7 @@
 
         {{-- ===== NÚT GỬI TIN NHẮN (CHỈ DÀNH CHO SINH VIÊN) ===== --}}
         @auth
-            @if(Auth::user()->hasRole('SinhVien') && Route::has('student.messages.create')) {{-- Kiểm tra route tồn tại --}}
+            @if(Auth::user()->hasRole('SinhVien') && Route::has('student.messages.create'))
                 <li class="nav-item no-arrow mx-1">
                      <a class="nav-link" href="{{ route('student.messages.create') }}" title="Gửi tin nhắn mới">
                         <i class="fas fa-paper-plane fa-fw text-primary"></i>
@@ -125,3 +124,4 @@
         </li>
     </ul>
 </nav>
+{{-- PHẦN SCRIPT ĐÃ ĐƯỢC XÓA KHỎI ĐÂY --}}

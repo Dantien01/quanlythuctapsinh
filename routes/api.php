@@ -19,16 +19,23 @@ use App\Http\Controllers\Api\Student\StudentAttendanceApiController;
 // Controller cho API Schedule của Sinh viên
 use App\Http\Controllers\Api\Student\StudentScheduleApiController;
 
-// === IMPORT CONTROLLERS CHO MESSAGE API ===
+// Controller cho API Message của Sinh viên
 use App\Http\Controllers\Api\Student\MessageApiController as StudentMessageApiController;
-use App\Http\Controllers\Api\Admin\MessageApiController as AdminMessageApiController; // << Đã có import này
-// ============================================
+// Controller cho API Message của Admin
+use App\Http\Controllers\Api\Admin\MessageApiController as AdminMessageApiController;
+
+// ============================================================================
+// ===== THÊM IMPORT CHO NOTIFICATION VÀ USER PROFILE API CONTROLLERS =====
+// ============================================================================
+use App\Http\Controllers\Api\NotificationController; // Cho cả Admin và Student
+use App\Http\Controllers\Api\UserProfileController;  // Cho cả Admin và Student
+// ============================================================================
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-use Illuminate\Support\Facades\Auth; // Thêm import này
-use App\Models\User; // Thêm import này (cho closure của route test)
-use Illuminate\Support\Facades\Log; // Thêm import này (cho closure của route test)
+use Illuminate\Support\Facades\Auth;
+use App\Models\User;
+use Illuminate\Support\Facades\Log;
 
 
 /*
@@ -47,6 +54,29 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Route lấy thông tin người dùng hiện tại đang đăng nhập
     Route::get('/user', [AuthController::class, 'user'])->name('api.user');
+
+
+    // ============================================================================
+    // ===== API CHO USER PROFILE (ÁP DỤNG CHO NGƯỜI DÙNG HIỆN TẠI ĐÃ XÁC THỰC) =====
+    // ============================================================================
+    Route::get('/profile', [UserProfileController::class, 'show'])->name('api.profile.show');
+    // Sử dụng POST cho update profile để dễ xử lý file upload (ảnh đại diện)
+    // Laravel sẽ tự hiểu nếu bạn gửi _method=PUT trong form-data
+    Route::post('/profile', [UserProfileController::class, 'update'])->name('api.profile.update');
+    Route::put('/profile/password', [UserProfileController::class, 'changePassword'])->name('api.profile.password.update');
+    // ============================================================================
+
+
+    // ============================================================================
+    // ===== API CHO NOTIFICATIONS (ÁP DỤNG CHO NGƯỜI DÙNG HIỆN TẠI ĐÃ XÁC THỰC) =====
+    // ============================================================================
+    Route::get('/notifications', [NotificationController::class, 'index'])->name('api.notifications.index');
+    Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount'])->name('api.notifications.unread-count');
+    Route::put('/notifications/mark-all-as-read', [NotificationController::class, 'markAllAsRead'])->name('api.notifications.mark_all_as_read');
+    // {notification} sẽ là ID (UUID) của DatabaseNotification
+    Route::put('/notifications/{notification}', [NotificationController::class, 'markAsRead'])->name('api.notifications.mark_as_read');
+    // ============================================================================
+
 
     // =====================================================================
     // CÁC API RESOURCE HIỆN TẠI CỦA BẠN (GIỮ NGUYÊN HOẶC COMMENT OUT NẾU CHƯA DÙNG)
@@ -94,68 +124,32 @@ Route::middleware('auth:sanctum')->group(function () {
     // =====================================================================
     // API ENDPOINTS CHO ADMIN
     // =====================================================================
-    Route::prefix('admin')->name('api.admin.')->middleware('role:Admin')->group(function () { // Đảm bảo chỉ Admin mới truy cập được
-        // ... các route API khác của Admin có thể đặt ở đây ...
-
-        // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-        // THÊM ROUTE KIỂM TRA XÁC THỰC ADMIN TẠI ĐÂY
+    Route::prefix('admin')->name('api.admin.')->middleware('role:Admin')->group(function () {
+        // Route kiểm tra xác thực Admin đã có
         Route::get('/auth-check', function (Request $request) {
-            $user = Auth::user(); // Hoặc $request->user();
-
+            $user = Auth::user();
             if ($user instanceof User) {
-                // Kiểm tra vai trò một lần nữa (tùy chọn nếu middleware 'role:Admin' đã xử lý)
-                // if (!$user->hasRole('Admin')) { // Giả sử bạn có phương thức hasRole()
-                //     Log::warning('API /admin/auth-check: User is authenticated but not an Admin via direct role check.', ['user_id' => $user->id]);
-                //     return response()->json(['success' => false, 'message' => 'Forbidden: User is authenticated but not an Admin.'], 403);
-                // }
-
-                Log::info('API /admin/auth-check: Authenticated admin user retrieved successfully.', [
-                    'user_id' => $user->id,
-                    'user_name' => $user->name,
-                    'user_email' => $user->email,
-                    'user_roles' => $user->relationLoaded('roles') ? $user->roles->pluck('name')->toArray() : 'Roles not loaded or no roles relationship',
-                ]);
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Authenticated admin user retrieved.',
-                    'data' => [
-                        'id' => $user->id,
-                        'name' => $user->name,
-                        'email' => $user->email,
-                        'roles' => $user->relationLoaded('roles') ? $user->roles->pluck('name')->toArray() : [],
-                        // Thêm các thông tin khác của user bạn muốn kiểm tra
-                    ]
-                ]);
+                Log::info('API /admin/auth-check: Authenticated admin user retrieved successfully.', [ /* ... */ ]);
+                return response()->json([ 'success' => true, 'message' => 'Authenticated admin user retrieved.', 'data' => [ /* ... */ ] ]);
             } elseif ($user === null) {
-                Log::warning('API /admin/auth-check: Auth::user() returned NULL. Authentication failed or no user associated with token.');
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Authentication failed: User is null (token might be invalid or no user attached).'
-                ], 401);
+                Log::warning('API /admin/auth-check: Auth::user() returned NULL.');
+                return response()->json([ 'success' => false, 'message' => 'Authentication failed: User is null.' ], 401);
             } else {
-                Log::error('API /admin/auth-check: Auth::user() returned an unexpected type.', [
-                    'type_returned' => gettype($user)
-                ]);
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Authentication error: Unexpected user type retrieved.',
-                    'type_returned' => gettype($user)
-                ], 500);
+                Log::error('API /admin/auth-check: Auth::user() returned an unexpected type.');
+                return response()->json([ 'success' => false, 'message' => 'Authentication error: Unexpected user type retrieved.' ], 500);
             }
-        })->name('auth.check'); // Đặt tên cho route nếu muốn
-        // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+        })->name('auth.check');
 
 
-        // --- Message Routes for Admin ---
+        // --- Message Routes for Admin (Đã có) ---
         Route::prefix('messages')->name('messages.')->group(function () {
             Route::get('/conversations', [AdminMessageApiController::class, 'getAllConversations'])->name('conversations.index');
-            // {student} sẽ tự động inject User model nếu Route Model Binding được bật và ID hợp lệ
-            // và User model có key là 'id' (mặc định).
-            // Controller method cần có type hint: User $student
             Route::get('/conversations/student/{student}', [AdminMessageApiController::class, 'getConversationWithStudent'])->name('conversations.show');
             Route::post('/send-to-student/{student}', [AdminMessageApiController::class, 'sendMessageToStudent'])->name('sendToStudent');
             Route::post('/conversations/student/{student}/mark-as-read', [AdminMessageApiController::class, 'markConversationAsRead'])->name('markConversationAsRead');
         });
+
+        // ... các route API khác của Admin có thể đặt ở đây ...
     });
     // =====================================================================
 

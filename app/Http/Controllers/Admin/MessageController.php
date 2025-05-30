@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\Conversation; // << THÊM MỚI
+use App\Models\Conversation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use App\Models\Message;
@@ -17,41 +17,74 @@ class MessageController extends Controller
 {
     /**
      * Hiển thị danh sách các cuộc trò chuyện của Admin với Sinh viên.
+     * ĐỒNG THỜI ĐÁNH DẤU TẤT CẢ TIN NHẮN CHƯA ĐỌC CỦA ADMIN LÀ ĐÃ ĐỌC.
      */
     public function index()
     {
         $admin = Auth::user();
 
+        // =====================================================================
+        // ===== BẮT ĐẦU PHẦN CẬP NHẬT: ĐÁNH DẤU TẤT CẢ TIN NHẮN CHƯA ĐỌC =====
+        // =====================================================================
+        // Lấy ID của tất cả các tin nhắn mà admin này là người tham gia
+        // và chưa có bản ghi MessageReadStatus cho admin này với read_at khác NULL.
+
+        // Lấy IDs của tất cả các messages mà admin này là một participant TRONG MỘT Conversation
+        // và message đó không phải do admin gửi, VÀ admin này chưa có bản ghi read_at cho message đó.
+        $messageIdsToMarkAsRead = Message::whereIn('conversation_id', function ($query) use ($admin) {
+                // Lấy ID các conversation mà admin là participant
+                $query->select('conversation_id')
+                      ->from('conversation_participants') // Giả sử bảng trung gian là conversation_user
+                      ->where('user_id', $admin->id);
+            })
+            ->where('sender_id', '!=', $admin->id) // Tin nhắn không phải do admin gửi
+            ->whereDoesntHave('readStatuses', function ($subQuery) use ($admin) {
+                // Kiểm tra xem admin đã có bản ghi read_at cho message này chưa
+                $subQuery->where('user_id', $admin->id)->whereNotNull('read_at');
+            })
+            ->pluck('id'); // Lấy danh sách ID của các message đó
+
+        // Nếu có tin nhắn cần đánh dấu đọc, tiến hành cập nhật hoặc tạo mới MessageReadStatus
+        if ($messageIdsToMarkAsRead->isNotEmpty()) {
+            foreach ($messageIdsToMarkAsRead as $messageId) {
+                MessageReadStatus::updateOrCreate(
+                    [
+                        'message_id' => $messageId,
+                        'user_id' => $admin->id,
+                    ],
+                    [
+                        'read_at' => now(),
+                    ]
+                );
+            }
+            Log::info("Admin {$admin->id} đã xem trang messages, {$messageIdsToMarkAsRead->count()} tin nhắn được đánh dấu đã đọc.");
+        }
+        // =====================================================================
+        // ===== KẾT THÚC PHẦN CẬP NHẬT                                     =====
+        // =====================================================================
+
+
+        // Phần code lấy danh sách conversations giữ nguyên như của bạn
         $conversations = Conversation::whereHas('participants', function ($query) use ($admin) {
-            $query->where('users.id', $admin->id); // Admin là một người tham gia
+            $query->where('users.id', $admin->id);
         })
-        ->whereHas('participants', function ($query) { // Và người tham gia còn lại là SinhVien
+        ->whereHas('participants', function ($query) {
             $query->whereHas('role', fn($q) => $q->where('name', 'SinhVien'));
         })
         ->with([
-            // Lấy thông tin người tham gia còn lại (SinhVien)
             'participants' => function ($query) use ($admin) {
-                $query->where('users.id', '!=', $admin->id)->with('role'); // Eager load role của student
+                $query->where('users.id', '!=', $admin->id)->with('role');
             },
-            // Lấy tin nhắn cuối cùng và người gửi của nó
             'lastMessage' => function ($query) {
                 $query->with('sender');
             }
         ])
-        // Đếm số tin nhắn CHƯA ĐỌC mà SINH VIÊN GỬI cho ADMIN này
         ->withCount(['messages as unread_messages_count' => function ($query) use ($admin) {
-            $query->where('sender_id', '!=', $admin->id) // Tin nhắn không phải do admin gửi
-                  // Giả sử dùng MessageReadStatus hoặc logic khác để check read status
-                  // Nếu dùng MessageReadStatus:
+            $query->where('sender_id', '!=', $admin->id)
                   ->whereDoesntHave('readStatuses', function ($subQuery) use ($admin) {
                       $subQuery->where('user_id', $admin->id)->whereNotNull('read_at');
                   });
-            // Nếu bạn dùng cột read_at trực tiếp trên messages (đã bỏ) thì sẽ là:
-            // ->whereNull('read_at'); // Và admin chưa đọc (logic này cần xem lại nếu read_at là của người nhận)
         }])
-        // Sắp xếp theo thời gian của tin nhắn cuối cùng
-        // (Cần đảm bảo lastMessage() được định nghĩa và hoạt động đúng)
-        // Cách sắp xếp này có thể cần tối ưu hóa trên CSDL lớn
         ->orderByDesc(
             Message::select('created_at')
                 ->whereColumn('conversation_id', 'conversations.id')
@@ -67,7 +100,7 @@ class MessageController extends Controller
      * Hiển thị chi tiết cuộc trò chuyện với một sinh viên cụ thể.
      * Đánh dấu các tin nhắn chưa đọc của sinh viên gửi cho admin là đã đọc.
      */
-    public function show(User $student) // $student là sinh viên được chọn
+    public function show(User $student)
     {
         $admin = Auth::user();
 
@@ -75,22 +108,19 @@ class MessageController extends Controller
             abort(404, 'Không tìm thấy sinh viên.');
         }
 
-        // Tìm Conversation giữa admin và sinh viên này
-        $conversation = Conversation::findOrCreateBetween($admin, $student); // Sử dụng helper
+        $conversation = Conversation::findOrCreateBetween($admin, $student);
 
-        // Đánh dấu tin nhắn từ sinh viên này trong cuộc trò chuyện này gửi cho admin là đã đọc
-        // Nếu dùng bảng message_read_statuses:
+        // Đánh dấu tin nhắn từ sinh viên này TRONG CUỘC TRÒ CHUYỆN NÀY gửi cho admin là đã đọc
         MessageReadStatus::whereHas('message', function($query) use ($conversation, $student){
             $query->where('conversation_id', $conversation->id)
-                  ->where('sender_id', $student->id); // Tin nhắn do sinh viên gửi
+                  ->where('sender_id', $student->id);
         })
-        ->where('user_id', $admin->id) // Cho admin này
+        ->where('user_id', $admin->id)
         ->whereNull('read_at')
         ->update(['read_at' => now()]);
 
-        // Lấy toàn bộ tin nhắn trong cuộc trò chuyện này, sắp xếp theo thời gian tạo
         $messages = $conversation->messages()
-                           ->with(['sender']) // Eager load người gửi
+                           ->with(['sender'])
                            ->orderBy('created_at', 'asc')
                            ->paginate(30);
 
@@ -100,7 +130,7 @@ class MessageController extends Controller
     /**
      * Lưu tin nhắn trả lời từ Admin cho Sinh viên.
      */
-    public function reply(Request $request, User $student) // $student ở đây là sinh viên nhận tin nhắn
+    public function reply(Request $request, User $student)
     {
         $request->validate([
             'content' => 'required|string|max:5000',
@@ -112,10 +142,8 @@ class MessageController extends Controller
             return back()->with('error', 'Không thể gửi tin nhắn cho người dùng này.')->withInput();
         }
 
-        // 1. Tìm hoặc tạo Conversation
         $conversation = Conversation::findOrCreateBetween($admin, $student);
 
-        // 2. Tạo tin nhắn mới
         $newMessage = $conversation->messages()->create([
             'sender_id' => $admin->id,
             'content' => $request->input('content'),
@@ -126,16 +154,8 @@ class MessageController extends Controller
             return back()->with('error', 'Đã xảy ra lỗi khi gửi tin nhắn. Vui lòng thử lại.')->withInput();
         }
 
-        // 3. (Tùy chọn) Tạo MessageReadStatus cho người nhận (sinh viên)
-        // MessageReadStatus::create([
-        //     'message_id' => $newMessage->id,
-        //     'user_id' => $student->id,
-        //     'read_at' => null,
-        // ]);
-
-        // Gửi thông báo cho Sinh viên
         try {
-            $student->notify(new NewMessageNotification($newMessage->load('sender'))); // Load sender để notification có thông tin
+            $student->notify(new NewMessageNotification($newMessage->load('sender')));
         } catch (\Exception $e) {
             Log::error("Lỗi gửi thông báo tin nhắn mới từ Admin {$admin->id} cho SinhVien {$student->id}: " . $e->getMessage());
         }
